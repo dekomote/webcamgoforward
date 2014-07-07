@@ -3,44 +3,47 @@ package main
 
 import (
     "./logger"
+    "./utils"
     "net"
     "bufio"
     "mime/multipart"
 )
 
 
-type Message struct {
-    command string
-    payload string
-}
-
+const MESSAGE_BOUNDARY  string = "---jsonrpcprotocolboundary---"
 
 type Client struct {
 
     conn net.Conn
     reader *multipart.Reader
     writer *bufio.Writer
-    inbound chan string
-    outbound chan string
+    inbound chan utils.Message
+    outbound chan utils.Message
 
 }
 
 
 func (client *Client) Read() {
-
     for {
-        part, _ := client.reader.NextPart()
+        part, err := client.reader.NextPart()
+        if err != nil {
+            logger.Error.Println(err)
+        }
+        logger.Info.Printf("Part %v", part)
         var line []byte
         part.Read(line)
-        client.inbound <- string(line)
+        logger.Info.Printf("Read %v", utils.Unpack(line))
+        client.inbound <- utils.Unpack(line)
     }
 }
 
 
 func (client *Client) Write() {
     for data := range client.outbound {
-        logger.Info.Println(data)
-        client.writer.WriteString(data)
+
+        logger.Info.Printf("Write %v", data.Pack())
+        client.writer.WriteString(data.Pack())
+        client.writer.WriteString(MESSAGE_BOUNDARY)
         client.writer.Flush()
     }
 }
@@ -54,11 +57,11 @@ func (client *Client) Listen() {
 
 func NewClient(conn net.Conn) *Client{
     writer := bufio.NewWriter(conn)
-    reader := multipart.NewReader(conn, "---jsonrpcprotocolboundary---")
+    reader := multipart.NewReader(conn, MESSAGE_BOUNDARY)
 
     client := &Client {
-        inbound: make(chan string),
-        outbound: make(chan string),
+        inbound: make(chan utils.Message),
+        outbound: make(chan utils.Message),
         conn: conn,
         reader: reader,
         writer: writer,
@@ -67,7 +70,9 @@ func NewClient(conn net.Conn) *Client{
     logger.Info.Printf("Client %v is accepting messages\n", conn.RemoteAddr())
     client.Listen()
 
-    client.outbound <- "{\"command\": \"authenticate\", \"payload\": \"dasd2342342asfdf234\"} ---jsonrpcprotocolboundary---"
+    m := utils.Message{"authenticate","sdjfsodifjsoij"}
+
+    client.outbound <- m
 
     return client
 }
