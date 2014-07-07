@@ -7,18 +7,21 @@ import (
     "net"
     "bufio"
     "strings"
+    "code.google.com/p/go-uuid/uuid"
 )
 
 
 const MESSAGE_BOUNDARY  string = "---jsonrpcprotocolboundary---"
 
 type Client struct {
-
+    ID string
+    secret string
     conn net.Conn
-    Reader *bufio.Reader
+    reader *bufio.Reader
     writer *bufio.Writer
     inbound chan utils.Message
     outbound chan utils.Message
+
 
 }
 
@@ -27,18 +30,21 @@ func (client *Client) Read() {
 
     buff := ""
     for {
-        tempBuff, err := client.Reader.ReadString('-')
+        tempBuff, err := client.reader.ReadString('-')
         if err != nil {
             logger.Error.Println(err)
         }
-        
-        
+
+        //TODO Handle EOF
+
+
         buff += string(tempBuff)
         if strings.Contains(buff, MESSAGE_BOUNDARY) {
             s := strings.Split(buff, MESSAGE_BOUNDARY)[0]
-            o := buff[len(s):]
+            o := buff[len(s)+len(MESSAGE_BOUNDARY):]
             client.inbound <- utils.Unpack([]byte(s))
             buff = o
+            logger.Info.Println(buff)
         }
     }
 }
@@ -54,32 +60,50 @@ func (client *Client) Write() {
     }
 }
 
+func (client *Client) Message() {
+    for data := range client.inbound {
+        switch data.Command {
+            case "authenticate": {
+                client.secret = data.Payload
+                m := utils.Message{"authenticated", client.ID}
+                client.outbound <- m
+            }
+            case "heartbeat": {
+                m := utils.Message{"heartbeat", ""}
+                client.outbound <- m
+            }
+        }
+    }
+}
+
 
 func (client *Client) Listen() {
     go client.Read()
     go client.Write()
+    go client.Message()
+
+    m := utils.Message{"authenticate", client.ID}
+    client.outbound <- m
 }
 
 
 func NewClient(conn net.Conn) *Client{
     writer := bufio.NewWriter(conn)
-    Reader := bufio.NewReader(conn)
+    reader := bufio.NewReader(conn)
 
     client := &Client {
+        ID : uuid.New(),
+        secret : "",
         inbound: make(chan utils.Message),
         outbound: make(chan utils.Message),
         conn: conn,
-        Reader: Reader,
+        reader: reader,
         writer: writer,
     }
 
     logger.Info.Printf("Client %v is accepting messages\n", conn.RemoteAddr())
+    
     client.Listen()
-
-    m := utils.Message{"authenticate","sdjfsodifjsoij"}
-
-    client.outbound <- m
-
     return client
 }
 
