@@ -6,7 +6,7 @@ import (
     "./utils"
     "net"
     "bufio"
-    "mime/multipart"
+    "strings"
 )
 
 
@@ -15,7 +15,7 @@ const MESSAGE_BOUNDARY  string = "---jsonrpcprotocolboundary---"
 type Client struct {
 
     conn net.Conn
-    reader *multipart.Reader
+    Reader *bufio.Reader
     writer *bufio.Writer
     inbound chan utils.Message
     outbound chan utils.Message
@@ -24,16 +24,22 @@ type Client struct {
 
 
 func (client *Client) Read() {
+
+    buff := ""
     for {
-        part, err := client.reader.NextPart()
+        tempBuff, err := client.Reader.ReadString('-')
         if err != nil {
             logger.Error.Println(err)
         }
-        logger.Info.Printf("Part %v", part)
-        var line []byte
-        part.Read(line)
-        logger.Info.Printf("Read %v", utils.Unpack(line))
-        client.inbound <- utils.Unpack(line)
+        
+        
+        buff += string(tempBuff)
+        if strings.Contains(buff, MESSAGE_BOUNDARY) {
+            s := strings.Split(buff, MESSAGE_BOUNDARY)[0]
+            o := buff[len(s):]
+            client.inbound <- utils.Unpack([]byte(s))
+            buff = o
+        }
     }
 }
 
@@ -57,13 +63,13 @@ func (client *Client) Listen() {
 
 func NewClient(conn net.Conn) *Client{
     writer := bufio.NewWriter(conn)
-    reader := multipart.NewReader(conn, MESSAGE_BOUNDARY)
+    Reader := bufio.NewReader(conn)
 
     client := &Client {
         inbound: make(chan utils.Message),
         outbound: make(chan utils.Message),
         conn: conn,
-        reader: reader,
+        Reader: Reader,
         writer: writer,
     }
 

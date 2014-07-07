@@ -2,7 +2,7 @@ package utils
 
 
 import (
-    "webcamgoforward/logger"
+    "../logger"
     "encoding/json"
     "strings"
 )
