@@ -5,6 +5,7 @@ import (
     "./logger"
     "net"
     "bufio"
+    "mime/multipart"
 )
 
 
@@ -17,10 +18,10 @@ type Message struct {
 type Client struct {
 
     conn net.Conn
-    reader *bufio.Reader
+    reader *multipart.Reader
     writer *bufio.Writer
-    inbound chan Message
-    outbound chan Message
+    inbound chan string
+    outbound chan string
 
 }
 
@@ -28,17 +29,20 @@ type Client struct {
 func (client *Client) Read() {
 
     for {
-        line, _ := client.reader.ReadString("---jsonrpcprotocolboundary---")
-        //client.inbound <- line
+        part, _ := client.reader.NextPart()
+        var line []byte
+        part.Read(line)
+        client.inbound <- string(line)
     }
 }
 
 
 func (client *Client) Write() {
-    //for data := range client.outgoing {
-    //    client.writer.WriteString(data)
-    //    client.writer.Flush()
-    //}
+    for data := range client.outbound {
+        logger.Info.Println(data)
+        client.writer.WriteString(data)
+        client.writer.Flush()
+    }
 }
 
 
@@ -50,11 +54,11 @@ func (client *Client) Listen() {
 
 func NewClient(conn net.Conn) *Client{
     writer := bufio.NewWriter(conn)
-    reader := bufio.NewReader(conn)
+    reader := multipart.NewReader(conn, "---jsonrpcprotocolboundary---")
 
     client := &Client {
-        inbound: make(chan Message),
-        outbound: make(chan Message),
+        inbound: make(chan string),
+        outbound: make(chan string),
         conn: conn,
         reader: reader,
         writer: writer,
@@ -63,14 +67,15 @@ func NewClient(conn net.Conn) *Client{
     logger.Info.Printf("Client %v is accepting messages\n", conn.RemoteAddr())
     client.Listen()
 
+    client.outbound <- "{\"command\": \"authenticate\", \"payload\": \"dasd2342342asfdf234\"} ---jsonrpcprotocolboundary---"
+
     return client
 }
 
 
 func connectionMade(conn net.Conn) {
     logger.Info.Printf("Client %v connected\n", conn.RemoteAddr())
-
-    client := NewClient(conn)
+    NewClient(conn)
 }
 
 
