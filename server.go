@@ -4,8 +4,9 @@ package main
 import (
     "./logger"
     "./utils"
-    "fmt"
     "bufio"
+    "io"
+    "fmt"
     "mime/multipart"
     "net"
     "net/http"
@@ -40,10 +41,10 @@ func (client *Client) Read() {
         tempBuff, err := client.reader.ReadString('-')
         if err != nil {
             logger.Error.Println(err)
+            if err == io.EOF {
+                return
+            }
         }
-
-        //TODO Handle EOF
-
 
         buff += string(tempBuff)
         if strings.Contains(buff, MESSAGE_BOUNDARY) {
@@ -100,7 +101,7 @@ func (client *Client) Listen() {
 
 
 func (client *Client) AttachHandler() {
-    http.HandleFunc("/" + string(client.secret) + "/", func(w http.ResponseWriter, r *http.Request){
+    http.HandleFunc("/" + string(client.secret) + "/" + string(client.ID), func(w http.ResponseWriter, r *http.Request){
             logger.Info.Println("Starting the image stream")
             client.outbound <- utils.Message{"start_stream", ""}
             w.Header().Set("Content-type", "multipart/x-mixed-replace;boundary=" + MJPEG_BOUNDARY)
@@ -108,15 +109,24 @@ func (client *Client) AttachHandler() {
             multipartWriter.SetBoundary(MJPEG_BOUNDARY)
             for image := range client.image_stream {
                 client.image_write_locked = true
-                iw, _ := multipartWriter.CreatePart(textproto.MIMEHeader{
+                iw, parterr := multipartWriter.CreatePart(textproto.MIMEHeader{
                         "Content-type": []string{"image/jpeg"},
                         "Content-length": []string{strconv.Itoa(len(image))},
                     })
-                iw.Write(image)
-                //TODO Handle Error here - Stop the streaming
+                if parterr != nil{
+                    logger.Error.Println(parterr)
+                } else {
+                    _, err := iw.Write(image)
+                    if err != nil{
+                        logger.Error.Println(err)
+                        client.image_write_locked = false
+                        client.outbound <- utils.Message{"stop_stream", ""}
+                        return
+                    }
+                }
                 client.image_write_locked = false
             }
-            client.outbound <- utils.Message{"stop_stream", ""}
+            //client.outbound <- utils.Message{"stop_stream", ""}
         })
 }
 
@@ -169,6 +179,7 @@ func main() {
 
     if err != nil {
         logger.Error.Println(err)
+        return
     }
     
     for {
@@ -177,6 +188,7 @@ func main() {
         
         if err != nil {
             logger.Error.Println(err)
+            continue
         }
 
         go ConnectionMade(conn)
