@@ -18,9 +18,13 @@ import (
 )
 
 
+// Defining the message boundaries. The first one is used by the protocol
+// and the second one is used by the HTTP server while streaming mjpeg
 const MESSAGE_BOUNDARY  string = "---jsonrpcprotocolboundary---"
 const MJPEG_BOUNDARY string = "mjpegboundary"
 
+// Client struct - keeps state for one connected client as well as channels
+// associated with the Client.
 type Client struct {
     ID string
     secret string
@@ -34,8 +38,11 @@ type Client struct {
 }
 
 
+// Read method to the client struct reads string by string from the bufio
+// reader tied to the connection, splitting the messages by MESSAGE_BOUNDARY
+// and sending each message to the inbound channel
 func (client *Client) Read() {
-
+    // 
     buff := ""
     for {
         tempBuff, err := client.reader.ReadString('-')
@@ -56,7 +63,8 @@ func (client *Client) Read() {
     }
 }
 
-
+// Write method to the client struct writes data in the outbound channel
+// to the bufio writer tied to the connection
 func (client *Client) Write() {
     for data := range client.outbound {
         client.writer.WriteString(data.Pack())
@@ -65,6 +73,8 @@ func (client *Client) Write() {
     }
 }
 
+// Message method gets each message from the inbound channel and switches based
+// on the command and payload
 func (client *Client) Message() {
     for data := range client.inbound {
         switch data.Command {
@@ -89,7 +99,7 @@ func (client *Client) Message() {
     }
 }
 
-
+// Listen is a helper method that gophers Read, Write and Message.
 func (client *Client) Listen() {
     go client.Read()
     go client.Write()
@@ -99,7 +109,9 @@ func (client *Client) Listen() {
     client.outbound <- m
 }
 
-
+// AttachHandler method attaches a http serve handler function to an url
+// specified by the Client's ID and secret. The attached function starts a 
+// mjpeg loop, writing multipart data fed from image_stream channel
 func (client *Client) AttachHandler() {
     http.HandleFunc("/" + string(client.secret) + "/" + string(client.ID), func(w http.ResponseWriter, r *http.Request){
             logger.Info.Println("Starting the image stream")
@@ -108,6 +120,7 @@ func (client *Client) AttachHandler() {
             multipartWriter := multipart.NewWriter(w)
             multipartWriter.SetBoundary(MJPEG_BOUNDARY)
             for image := range client.image_stream {
+                // So we don't write to the channel while rendering this image.
                 client.image_write_locked = true
                 iw, parterr := multipartWriter.CreatePart(textproto.MIMEHeader{
                         "Content-type": []string{"image/jpeg"},
@@ -118,6 +131,7 @@ func (client *Client) AttachHandler() {
                 } else {
                     _, err := iw.Write(image)
                     if err != nil{
+                        // The browser closed connection, or crashed...
                         logger.Error.Println(err)
                         client.image_write_locked = false
                         client.outbound <- utils.Message{"stop_stream", ""}
@@ -130,7 +144,7 @@ func (client *Client) AttachHandler() {
         })
 }
 
-
+// NewClient handles setting up a new client instance
 func NewClient(conn net.Conn) *Client{
     writer := bufio.NewWriter(conn)
     reader := bufio.NewReader(conn)
@@ -153,13 +167,14 @@ func NewClient(conn net.Conn) *Client{
     return client
 }
 
-
+// ConnectionMade is called after a client connects to the server. New instance
+// of client is created per connection
 func ConnectionMade(conn net.Conn) {
     logger.Info.Printf("Client %v connected\n", conn.RemoteAddr())
     NewClient(conn)
 }
 
-
+// StartHttpServer starts the HTTP server with a dummy home page
 func StartHttpServer() {
     logger.Info.Println("Serving HTTP at 8080")
     http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request){

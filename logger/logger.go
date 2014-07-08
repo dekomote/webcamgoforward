@@ -1,3 +1,5 @@
+// logger package is a thin wrapper around std log.
+// Added easy management of log levels
 package logger
 
 import (
@@ -13,6 +15,7 @@ var (
     Error   *log.Logger
 )
 
+// Init must be called prior to using the loggers
 func Init() {
 
     Trace = log.New(ioutil.Discard,
