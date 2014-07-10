@@ -3,36 +3,36 @@
 package logger
 
 import (
-    "io/ioutil"
-    "os"
-    "log"
+	"io/ioutil"
+	"log"
+	"os"
 )
 
 var (
-    Trace   *log.Logger
-    Info    *log.Logger
-    Warning *log.Logger
-    Error   *log.Logger
+	Trace   *log.Logger
+	Info    *log.Logger
+	Warning *log.Logger
+	Error   *log.Logger
 )
 
 // Init must be called prior to using the loggers
 func Init() {
 
-    Trace = log.New(ioutil.Discard,
-        "TRACE: ",
-        log.Ldate|log.Ltime|log.Lshortfile)
+	Trace = log.New(ioutil.Discard,
+		"TRACE: ",
+		log.Ldate|log.Ltime|log.Lshortfile)
 
-    Info = log.New(os.Stdout,
-        "INFO: ",
-        log.Ldate|log.Ltime|log.Lshortfile)
+	Info = log.New(os.Stdout,
+		"INFO: ",
+		log.Ldate|log.Ltime|log.Lshortfile)
 
-    Warning = log.New(os.Stdout,
-        "WARNING: ",
-        log.Ldate|log.Ltime|log.Lshortfile)
+	Warning = log.New(os.Stdout,
+		"WARNING: ",
+		log.Ldate|log.Ltime|log.Lshortfile)
 
-    Error = log.New(os.Stderr,
-        "ERROR: ",
-        log.Ldate|log.Ltime|log.Lshortfile)
+	Error = log.New(os.Stderr,
+		"ERROR: ",
+		log.Ldate|log.Ltime|log.Lshortfile)
 
-    Info.Println("Log started.")
+	Info.Println("Log started.")
 }
