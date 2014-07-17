@@ -1,8 +1,6 @@
 package main
 
 import (
-	"./logger"
-	"./utils"
 	"bufio"
 	"code.google.com/p/go-uuid/uuid"
 	"encoding/base64"
@@ -29,8 +27,8 @@ type Client struct {
 	conn               net.Conn
 	reader             *bufio.Reader
 	writer             *bufio.Writer
-	inbound            chan utils.Message
-	outbound           chan utils.Message
+	inbound            chan Message
+	outbound           chan Message
 	image_stream       chan []byte
 	image_write_locked bool
 }
@@ -44,7 +42,7 @@ func (client *Client) Read() {
 	for {
 		tempBuff, err := client.reader.ReadString('-')
 		if err != nil {
-			logger.Error.Println(err)
+			Error.Println(err)
 			if err == io.EOF {
 				return
 			}
@@ -54,7 +52,7 @@ func (client *Client) Read() {
 		if strings.Contains(buff, MESSAGE_BOUNDARY) {
 			s := strings.Split(buff, MESSAGE_BOUNDARY)[0]
 			o := buff[len(s)+len(MESSAGE_BOUNDARY):]
-			client.inbound <- utils.Unpack([]byte(s))
+			client.inbound <- Unpack([]byte(s))
 			buff = o
 		}
 	}
@@ -78,14 +76,14 @@ func (client *Client) Message() {
 		case "authenticate":
 			{
 				client.secret = data.Payload
-				logger.Info.Printf("Client %v authenticated\n", client.ID)
-				m := utils.Message{"authenticated", client.ID}
+				Info.Printf("Client %v authenticated\n", client.ID)
+				m := Message{"authenticated", client.ID}
 				client.outbound <- m
 				go client.AttachHandler()
 			}
 		case "heartbeat":
 			{
-				m := utils.Message{"heartbeat", ""}
+				m := Message{"heartbeat", ""}
 				client.outbound <- m
 			}
 		case "image":
@@ -105,7 +103,7 @@ func (client *Client) Listen() {
 	go client.Write()
 	go client.Message()
 
-	m := utils.Message{"authenticate", client.ID}
+	m := Message{"authenticate", client.ID}
 	client.outbound <- m
 }
 
@@ -114,8 +112,8 @@ func (client *Client) Listen() {
 // mjpeg loop, writing multipart data fed from image_stream channel
 func (client *Client) AttachHandler() {
 	http.HandleFunc("/"+string(client.secret)+"/"+string(client.ID), func(w http.ResponseWriter, r *http.Request) {
-		logger.Info.Println("Starting the image stream")
-		client.outbound <- utils.Message{"start_stream", ""}
+		Info.Println("Starting the image stream")
+		client.outbound <- Message{"start_stream", ""}
 		w.Header().Set("Content-type", "multipart/x-mixed-replace;boundary="+MJPEG_BOUNDARY)
 		multipartWriter := multipart.NewWriter(w)
 		multipartWriter.SetBoundary(MJPEG_BOUNDARY)
@@ -127,20 +125,20 @@ func (client *Client) AttachHandler() {
 				"Content-length": []string{strconv.Itoa(len(image))},
 			})
 			if parterr != nil {
-				logger.Error.Println(parterr)
+				Error.Println(parterr)
 			} else {
 				_, err := iw.Write(image)
 				if err != nil {
 					// The browser closed connection, or crashed...
-					logger.Error.Println(err)
+					Error.Println(err)
 					client.image_write_locked = false
-					client.outbound <- utils.Message{"stop_stream", ""}
+					client.outbound <- Message{"stop_stream", ""}
 					return
 				}
 			}
 			client.image_write_locked = false
 		}
-		//client.outbound <- utils.Message{"stop_stream", ""}
+		//client.outbound <- Message{"stop_stream", ""}
 	})
 }
 
@@ -152,8 +150,8 @@ func NewClient(conn net.Conn) *Client {
 	client := &Client{
 		ID:                 uuid.New(),
 		secret:             "",
-		inbound:            make(chan utils.Message),
-		outbound:           make(chan utils.Message),
+		inbound:            make(chan Message),
+		outbound:           make(chan Message),
 		image_stream:       make(chan []byte),
 		conn:               conn,
 		reader:             reader,
@@ -161,7 +159,7 @@ func NewClient(conn net.Conn) *Client {
 		image_write_locked: false,
 	}
 
-	logger.Info.Printf("Client %v is accepting messages\n", conn.RemoteAddr())
+	Info.Printf("Client %v is accepting messages\n", conn.RemoteAddr())
 
 	client.Listen()
 	return client
@@ -170,13 +168,13 @@ func NewClient(conn net.Conn) *Client {
 // ConnectionMade is called after a client connects to the server. New instance
 // of client is created per connection
 func ConnectionMade(conn net.Conn) {
-	logger.Info.Printf("Client %v connected\n", conn.RemoteAddr())
+	Info.Printf("Client %v connected\n", conn.RemoteAddr())
 	NewClient(conn)
 }
 
 // StartHttpServer starts the HTTP server with a dummy home page
 func StartHttpServer() {
-	logger.Info.Println("Serving HTTP at 8080")
+	Info.Println("Serving HTTP at 8080")
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "Check your client for the webcam url.")
 	})
@@ -184,24 +182,24 @@ func StartHttpServer() {
 }
 
 func main() {
-	logger.Init()
+	Init()
 
 	go StartHttpServer()
 
 	var ln, err = net.Listen("tcp", ":9000")
-	logger.Info.Printf("Started listening on %v\n", ln.Addr())
+	Info.Printf("Started listening on %v\n", ln.Addr())
 
 	if err != nil {
-		logger.Error.Println(err)
+		Error.Println(err)
 		return
 	}
 
 	for {
-		logger.Info.Println("Accepting connections...")
+		Info.Println("Accepting connections...")
 		var conn, err = ln.Accept()
 
 		if err != nil {
-			logger.Error.Println(err)
+			Error.Println(err)
 			continue
 		}
 

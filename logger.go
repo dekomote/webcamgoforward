@@ -1,6 +1,4 @@
-// logger package is a thin wrapper around std log.
-// Added easy management of log levels
-package logger
+package main
 
 import (
 	"io/ioutil"

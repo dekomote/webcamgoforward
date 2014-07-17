@@ -1,7 +1,6 @@
-package utils
+package main
 
 import (
-	"../logger"
 	"encoding/json"
 	"strings"
 )
@@ -14,7 +13,7 @@ type Message struct {
 func (message *Message) Pack() string {
 	b, err := json.Marshal(&message)
 	if err != nil {
-		logger.Error.Println(err)
+		Error.Println(err)
 	}
 
 	s := strings.Replace(string(b), "Command", "command", -1)
@@ -25,7 +24,7 @@ func Unpack(jsonBlob []byte) Message {
 	var message Message
 	err := json.Unmarshal(jsonBlob, &message)
 	if err != nil {
-		logger.Error.Println(err)
+		Error.Println(err)
 	}
 
 	return message
